@@ -1,0 +1,16 @@
+Package: Basic4CSim
+Type: Package
+Title: Basic4CSim: Simulation of 4C-seq data
+Version: 0.99
+Date: 2019-02-01
+Author: Carolin Walter
+Maintainer: Carolin Walter <carolin.walter@uni-muenster.de>
+Imports: methods
+Depends: R (>= 3.5), Biostrings, GenomicAlignments, GenomicRanges,
+        utils, BSgenome.Ecoli.NCBI.20080805
+Suggests: BSgenome.Hsapiens.UCSC.hg19
+Description: Basic4CSim is an R package for 4C-seq data simulation.
+License: LGPL-3
+biocViews: Sequencing, Coverage
+NeedsCompilation: no
+Packaged: 2019-03-11 15:28:28 UTC; walterca

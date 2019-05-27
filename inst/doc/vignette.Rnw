@@ -1,0 +1,214 @@
+%\VignetteIndexEntry{Basic4CSim: Simulation of 4C-seq data}
+%\VignettePackage{Basic4CSim}
+
+\documentclass[10pt]{article}
+
+\usepackage{times}
+\usepackage{hyperref}
+
+\textwidth=6.2in
+\textheight=8.5in
+\oddsidemargin=.1in
+\evensidemargin=.1in
+\headheight=-.3in
+
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rpackage}[1]{{\textit{#1}}}
+\newcommand{\Rmethod}[1]{{\texttt{#1}}}
+\newcommand{\Rfunarg}[1]{{\texttt{#1}}}
+\newcommand{\Rclass}[1]{{\textit{#1}}}
+\newcommand{\Rcode}[1]{{\texttt{#1}}}
+
+\SweaveOpts{prefix.string=Basic4CSim}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+\title{Basic4CSim: Simulation of 4C-seq data}
+\author{Carolin Walter}
+\date{\today}
+
+\maketitle
+
+\tableofcontents
+
+<<echo=FALSE>>=
+options(width=90)
+options(continue=" ")
+@
+
+
+\section{Introduction}
+
+Chromosome conformation capture combined with high-throughput sequencing (4C-seq) is a next-generation sequencing (NGS) based method to identify threedimensional contacts between a chosen viewpoint, and the remaining genome \cite{vandeWerken01}. 4C-seq data is fragment-based and suffers from biases like blind or non-blind fragments (cp.\cite{vandeWerken02}); simulation of this data type is therefore not trivial. 
+
+\Rpackage{Basic4CSim} can create virtual simulation fragment libraries, allows to create a characteristic background distribution and different noise patterns for simulated 4C-seq data, and offers the functionality to add different peak forms to simulated 4C-seq samples. The virtual fragment library is adapted from \Rpackage{Basic4Cseq} (cp. \cite{Walter01}). Simulated 4C-seq sample sequences can then be exported as fastq files.
+
+\subsection{Loading the package}
+After installation, the package can be loaded into R by typing 
+<<preliminaries>>=
+library(Basic4CSim)
+@
+into the R console. \\
+
+\subsection{Provided functionality}
+
+\Rpackage{Basic4Cseq} requires the R-packages \Rpackage{GenomicAlignments}, \Rpackage{Biostrings}, \Rpackage{caTools}, and \Rpackage{GenomicRanges}. The package \Rpackage{BSgenome.Hsapiens.UCSC.hg19} or any respective corresponding BSgenome package (e.g. for Mus musculus) is suggested for the creation of the virtual simulation library.
+
+This package provides the following basic functions for the simulation of 4C-seq data: \\
+\begin{itemize}
+\item \Rfunction{createVirtualFragmentLibrarySimulation}: creates virtual fragment libraries for BSgenome packages, with read sequences per fragment end
+\item \Rfunction{addBackground}: adds power-law distribution based background noise to the simulated sample
+\item \Rfunction{adaptBackground}: reduces read count for blind fragments, and adjusts the background noise rate to specific desired viewpoint fragment coverage rates
+\item \Rfunction{addPeaks}: adds peak regions with specified mean and standard deviation ("width") to the sample
+\item \Rfunction{makeRandomPeaks}: prepares a set of random peaks within predefined intervals for position, mean, and standard deviation
+\item \Rfunction{simulateSample}: wrapper function for the simulation of a basic 4C-seq sample with background, low noise, and peak regions
+\item \Rfunction{printFastq}: export function for simulated 4C-seq data to fastq format
+\end{itemize}
+
+\centerline{}
+
+In addition to the examples presented in this vignette, more detailed information on the function parameters and additional examples are presented in the corresponding manual pages.
+
+
+\section{Simulation of 4C-seq data}
+
+\Rpackage{Basic4CSim} is based on virtual fragment libraries similar to those used in \Rpackage{Basic4Cseq}. A virtual simulation fragment library specifies the position and properties of 4C-seq fragments, i.e. genomic intervals defined by the chosen first restriction enzyme sequence, with added sequence information for the raw fragments.
+
+For each simulated sample, one empty fragment count table is generated from the virtual simulation fragment library, which specifies the simulated signal or read count per 4C-seq fragment end. Initially, each fragment end has 0 allocated reads; 4C-seq background and signal are subsequently added as needed. As soon as the fragment count table is finished, corresponding fastq files with the respective fragment sequences can be exported.
+
+\subsection{Creation of a fragment library}
+
+\Rpackage{Basic4CSim}'s data simulations start with the creation of a fragment library. As with \Rpackage{Basic4Cseq}'s fragment libraries, the virtual simulation fragment libraries can be stored and reused for simulations with the same reference genome and restriction enzyme combinations. Creating a library for a 4bp+4bp experiment setting for a full human or mouse reference genome usually takes some hours, hence we demonstrate the function on a short example DNA string object:
+
+<<label=createVirtualFragmentLibrarySimulation, eval=TRUE>>=
+testGenome = DNAString("TCATGAAAGATCGGGGCATGTT")
+fragmentData = createVirtualFragmentLibrarySimulation(
+    chosenGenome = testGenome, firstCutter = "catg", 
+    secondCutter = "gatc", readLength = 3,  chromosomeName = 
+    "test", libraryName = "")
+head(fragmentData)
+@
+
+\subsection{Creating a set of random peaks}
+\Rpackage{Basic4CSim}'s default peaks follow the shape of a normal distribution ("bell-shaped"), with a certain position, maximum height and standard deviation. Peak regions can be set to specific values, or created randomly within certain preset constraints.
+
+<<label=makeRandomPeaks, eval=TRUE>>=
+vpStart = 69999869
+makeRandomPeaks(peakNumber=6, vpStart)
+@
+
+
+\subsection{Background noise}
+
+While there is a high concentration of signal at or close to the 4C-seq experiment's viewpoint ("near-cis"), a certain level of background noise is also expected for the remaining ("cis") part of the viewpoint chromosome. This noise can be added with \Rcode{addBackground}. Since the amount of fragments which are actually covered is typically far lower in cis than in near-cis, different coverage rates can be set to reflect this. The simulated background noise fragments' general signal strength follows a power-law distribution, as a similar distribution can usually be observed for real-world data (\cite{Thongjuea01}). A simulated example near-cis background is visualized in Figure \ref{fig:01}.
+
+<<label=addBackground, fig=TRUE, include=FALSE, eval=TRUE, PDF=TRUE>>=
+simLibFile <- system.file("extdata", "simLib_short.csv", 
+    package="Basic4CSim")
+# load virtual simulation fragment library
+simLib = read.csv(simLibFile, sep = "\t", header = TRUE)
+vpStart = 69999869
+# create empty simulation fragment count table
+simTable = data.frame(simLib[,1:3], "readsL" = 0, "readsR" = 0, 
+    simLib[,c(5,9,10)])
+colnames(simTable) = c("chromosomeName", "start", "end", 
+    "readsL", "readsR", "isNonBlind", "leftFragEndValid", "rightFragEndValid")
+# add actual background
+set.seed(42)
+simTable = addBackground(simTable, vpStart)
+head(simTable)
+@
+
+\begin{figure}[h]
+\includegraphics[width=13.5cm,height=7.5cm]{images/background_Output.pdf}
+\caption{Simulated raw background noise in near-cis, with a chosen fragment coverage rate of 0.8. The coverage rate and signal strength can be customized to account for cis/near-cis regions and different sample characteristics.}
+\label{fig:01}
+\end{figure}
+
+\subsection{Adding peaks}
+
+After simulating background noise, intervals with increased signal strength ("peaks") can be added to the fragment table with \Rcode{addPeaks}. Peaks from \Rcode{makeRandomPeaks} can be exported and used to simulate 4C-seq replicate data with different properties. In addition, smaller, randomly created noise peaks can be introduced as well (\Rcode{addRandomPeaks}). These noise peaks vary for each sample, unless a fixed seed is used in R. These raw peaks do not contain fragment-specific noise or adjustments for biases, e.g. penalties for read counts on fragments without a secondary restriction enzyme site ("blind fragments"), which are expected to yield less reads than non-blind fragments. An example for a near-cis region with simulated background and additional raw peaks is shown in Figure \ref{fig:02}.
+
+<<label=addPeaks, eval=TRUE>>=
+simTableFile <- system.file("extdata", "simTable_bg.csv", 
+    package="Basic4CSim")
+simTable = read.csv(simTableFile, sep = "\t", header = TRUE)
+vpStart = 69999869
+set.seed(42)
+randomPeaks = makeRandomPeaks(peakNumber=6, vpStart)
+simTable = addPeaks(simTable, randomPeaks, vpStart)
+head(simTable)
+@
+
+<<label=addRandomPeaks, eval=TRUE>>=
+simTableFile <- system.file("extdata", "simTable_peaks.csv", 
+    package="Basic4CSim")
+simTable = read.csv(simTableFile, sep = "\t", header = TRUE)
+vpStart = 69999869
+set.seed(42)
+simTable = addRandomPeaks(simTable, vpStart)
+head(simTable)
+@
+
+\begin{figure}[h]
+\includegraphics[width=13.5cm,height=7.5cm]{images/addPeaks_Output.pdf}
+\caption{Simulated background, with added peaks, noise, and viewpoint. Peak files can be used for different simulated samples to create simulated replicates. Adapting the profile to account for blind fragments, distance from the viewpoint, and random fragment effects is still necessary, though.}
+\label{fig:02}
+\end{figure}
+
+\subsection{Adapting the near-cis region}
+
+With a certain amount of background noise and higher 4C-seq signal in certain intervals, the simulated near-cis region still lacks noise per fragment, and a modification that induces increasing loss of signal with increasing distance from the viewpoint. Furthermore, blind fragments without a secondary restriction enzyme site are expected to yield less reads than non-blind fragments. The function \Rcode{adaptBackground} can be used to model and customize these effects for a simulated 4C-seq sample, its effects for the example viewpoint are shown in Figure \ref{fig:03}.
+
+<<label=adaptBackground, eval=TRUE>>=
+simTableFile <- system.file("extdata", "simTable_noise.csv", 
+    package="Basic4CSim")
+simTable = read.csv(simTableFile, sep = "\t", header = TRUE)
+vpStart = 69999869
+set.seed(42)
+simTable = adaptBackground(simTable, vpStart, useNormDist = TRUE,
+    vpRegionDist = 150000)
+head(simTable)
+@
+
+\begin{figure}[h]
+\includegraphics[width=13.5cm,height=7.5cm]{images/adaptPeaks_Output.pdf}
+\caption{Simulated 4C-seq data, with adapted near-cis region. Peaks with a higher distance from the simulated viewpoint have now a reduced signal strength, noise per fragment is introduced for the peak regions, and blind fragments have an appropriate penalty for their read count.}
+\label{fig:03}
+\end{figure}
+
+Additionally, further manipulations of the fragment table are possible with basic R table operations. The actual viewpoint fragment is typically vastly overrepresented in a 4C-seq experiment, and removed accordingly, but if this feature is of interest, the fragment can manually be set to a high read count value.
+
+A wrapper function, \Rcode{simulateSample}, encapsulates the above-mentioned functions, simulates a basic 4C-seq sample, and prints the corresponding fastq file. 
+
+\subsection{Export simulated data}
+
+If the simulated sample is finished, a corresponding fastq file can be exported for the simulated fragment table with \Rcode{printFastq}.
+
+<<label=printFastq, eval=FALSE>>=
+simLibFile <- system.file("extdata", "simLib_short.csv", 
+    package="Basic4CSim")
+simLib = read.csv(simLibFile, sep = "\t", header = TRUE)
+simTableFile <- system.file("extdata", "simTable_adapted.csv", 
+    package="Basic4CSim")
+simTable = read.csv(simTableFile, sep = "\t", header = TRUE)
+printFastq(simTable, simLib, "test", "CATG")
+@
+
+\begin{thebibliography}{}
+
+\bibitem[Thongjuea {\it et~al}., 2013]{Thongjuea01} Thongjuea, S., Stadhouders, R., Grosveld, F., et al. (2013) r3Cseq: an R/Bioconductor package for the discovery of long-range genomic interactions from chromosome conformation capture and next-generation sequencing data, {\it Nucleic Acids Research}, 41(13), e132.
+\bibitem[van de Werken {\it et al}. A, 2012]{vandeWerken01} van de Werken, H., Landan, G., Holwerda, S., et al. (2012) Robust 4C-seq data analysis to screen for regulatory DNA interactions, {\it Nature Methods}, {\bf 9}, 969-971.
+\bibitem[van de Werken {\it et al}. B, 2012]{vandeWerken02} van de Werken, H., de Vree, P., Splinter, E., et al. (2012) 4C technology: protocols and data analysis, {\it Methods Enzymology}, {\bf 513}, 89-112.
+\bibitem[Walter {\it et~al}., 2014]{Walter01} Walter, C., Schuetzmann, D., Rosenbauer, F., et al. (2014) Basic4Cseq: an R/Bioconductor package for analyzing 4C-seq data, {\it Bioinformatics}, 30(22), 3268-3269.
+\end{thebibliography}
+
+
+\section{Session Information}
+<<sessionInfo, echo=FALSE>>=
+sessionInfo()
+@
+
+\end{document}

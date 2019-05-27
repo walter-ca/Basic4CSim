@@ -1,0 +1,25 @@
+import(methods)
+import(Biostrings)
+import(GenomicAlignments)
+import(BSgenome.Ecoli.NCBI.20080805)
+import(GenomicRanges)
+importFrom("grDevices", "dev.off", "pdf")
+importFrom("graphics", "axis", "lines", "par", "plot", "plot.window",
+    "points", "polygon", "rect", "text")
+importFrom("stats", "dnorm", "runif")
+importFrom("utils", "read.csv", "read.table", "write.table")
+
+
+exportMethods(
+    adaptBackground,
+    addBackground,
+    addCisPeaks,
+    addPeaks,
+    addRandomPeaks,
+    createVirtualFragmentLibrarySimulation,
+    makeRandomPeaks,
+    printFastq,
+    simulateSample
+)
+
+
